@@ -1,0 +1,26 @@
+{
+  "intents": [
+    {
+      "intent": "ToggleSwitchIntent",
+      "slots": [
+        {
+          "name": "DeviceName",
+          "type": "LIST_OF_DEVICES"
+        },
+        {
+          "name": "Action",
+          "type": "ON_OFF"
+        }
+      ]
+    },
+    {
+      "intent": "AMAZON.HelpIntent"
+    },
+    {
+      "intent": "AMAZON.StopIntent"
+    },
+    {
+      "intent": "AMAZON.CancelIntent"
+    }
+  ]
+}

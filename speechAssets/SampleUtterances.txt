@@ -1,0 +1,5 @@
+ToggleSwitchIntent turn the {DeviceName} {Action}
+ToggleSwitchIntent turn {Action} {DeviceName}
+ToggleSwitchIntent turn {Action} the {DeviceName}
+ToggleSwitchIntent turn {DeviceName} {Action}
+ToggleSwitchIntent {DeviceName} {Action}
