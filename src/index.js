@@ -122,7 +122,7 @@ function handleControl(event, context) {
      * Fail the invocation if the header is unexpected. This example only demonstrates
      * turn on / turn off, hence we are filtering on anything that is not SwitchOnOffRequest.
      */
-    if (event.header.namespace != 'Alexa.ConnectedHome.Control' || !(/Turn(?:On|Off)Request/i).test(event.header.name)) {
+    if (event.header.namespace != 'Alexa.ConnectedHome.Control' || !(/Turn(?:On|Off)Request|(?:Set|Increment|Decrement)PercentageRequest/i).test(event.header.name)) {
         context.fail(generateControlError('SwitchOnOffRequest', 'UNSUPPORTED_OPERATION', 'Unrecognized operation'));
     }
 
@@ -131,9 +131,13 @@ function handleControl(event, context) {
         /**
          * Retrieve the appliance id and accessToken from the incoming message.
          */
-        var applianceId = event.payload.appliance.applianceId;
         var accessToken = event.payload.accessToken.trim();
         var turnOn = (/on/i).test(event.header.name);
+        var appliance = event.payload.appliance;
+        var applianceId = appliance.applianceId;
+        var index = appliance.additionalApplianceDetails.binaryIndex || appliance.additionalApplianceDetails.multiIndex;
+        var value = appliance.additionalApplianceDetails.binaryIndex ? turnOn :
+            (turnOn ? appliance.additionalApplianceDetails.maxValue : 0);
         log('applianceId', applianceId);
 
         /**
@@ -143,12 +147,7 @@ function handleControl(event, context) {
          *	validate the authentication has not expired else return EXPIRED_ACCESS_TOKEN error
          * Please see the technical documentation for detailed list of errors
          */
-        var path = '';
-        if (turnOn) {
-            path = REMOTE_CLOUD_BASE_PATH + '/switches/' + applianceId + '/on?access_token=' + accessToken;
-        } else {
-            path = REMOTE_CLOUD_BASE_PATH + '/switches/' + applianceId + '/off?access_token=' + accessToken;
-        }
+        var path = REMOTE_CLOUD_BASE_PATH + '/switches/' + applianceId + '/' + index + '/' + value + '?access_token=' + accessToken;
 
         var options = {
             hostname: REMOTE_CLOUD_HOSTNAME,
@@ -204,6 +203,69 @@ function handleControl(event, context) {
         /**
          * Make an HTTPS call to remote endpoint.
          */
+        https.get(options, callback)
+            .on('error', serverError).end();
+    }
+
+    if (event.header.namespace === 'Alexa.ConnectedHome.Control' && (/(?:Set|Increment|Decrement)PercentageRequest/i).test(event.header.name)) {
+
+        function getValue(appliance, p) {
+            return Math.round((p / 100) * appliance.additionalApplianceDetails.maxValue);
+        }
+
+        var accessToken = event.payload.accessToken.trim();
+        var appliance = event.payload.appliance;
+        var applianceId = appliance.applianceId;
+        var index = appliance.additionalApplianceDetails.multiIndex;
+        var value = getValue(appliance, event.payload.percentageState.value);
+        log('applianceId', applianceId);
+
+        var path = REMOTE_CLOUD_BASE_PATH + '/switches/' + applianceId + '/' + index + '/' + value + '?access_token=' + accessToken;
+
+        var options = {
+            hostname: REMOTE_CLOUD_HOSTNAME,
+            port: 443,
+            path: path,
+            headers: {
+                accept: '*/*'
+            }
+        };
+
+        log('options', options);
+
+        var serverError = function (e) {
+            log('Error', e.message);
+            context.fail(generateControlError(event.header.name, 'DEPENDENT_SERVICE_UNAVAILABLE', 'Unable to connect to server'));
+        };
+
+        var callback = function(response) {
+            var str = '';
+
+            response.on('data', function(chunk) {
+                str += chunk.toString('utf-8');
+            });
+
+            response.on('end', function() {
+                log('Almond Response', str);
+                var headers = {
+                    namespace: 'Alexa.ConnectedHome.Control',
+                    name: event.header.name.replace('Request', 'Confirmation'),
+                    payloadVersion: '1'
+                };
+                var payloads = {
+                    success: true
+                };
+                var result = {
+                    header: headers,
+                    payload: payloads
+                };
+                log('Control Response', result);
+                context.succeed(result);
+            });
+
+            response.on('error', serverError);
+        };
+
         https.get(options, callback)
             .on('error', serverError).end();
     }
